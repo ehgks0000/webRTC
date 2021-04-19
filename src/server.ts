@@ -5,14 +5,21 @@ import { Server as HTTPServer, createServer } from "https";
 import fs from "fs";
 import path from "path";
 
+interface Credentials {
+  key: Buffer;
+  cert: Buffer;
+}
+
 export class Server {
   private httpServer: HTTPServer;
   private app: Application;
   private io: SocketIOServer;
 
-  private readonly DEFAULT_PORT = 5000;
+  private activeSockets: string[] = [];
 
-  private readonly credentials = {
+  private readonly DEFAULT_PORT: number = 5000;
+
+  private readonly credentials: Credentials = {
     key: fs.readFileSync("./cert.key"),
     cert: fs.readFileSync("./cert.crt"),
   };
@@ -24,8 +31,8 @@ export class Server {
   constructor() {
     this.initialize();
 
-    this.handleRoutes();
-    this.handleSocketConnection();
+    // this.handleRoutes();
+    // this.handleSocketConnection();
   }
 
   private initialize(): void {
@@ -34,26 +41,63 @@ export class Server {
     this.io = new SocketIOServer(this.httpServer);
 
     this.configureApp();
+    this.handleRoutes();
     this.handleSocketConnection();
   }
 
   private handleRoutes(): void {
     this.app.get("/", (req, res) => {
-      res.send(`<h1>Hello World</h1>`);
+      //   res.send(`<h1>Hello World</h1>`);
+      res.sendFile("index.html");
     });
   }
 
   private handleSocketConnection(): void {
     this.io.on("connection", (socket) => {
-      //   socket.on("login", (data) => {
-      //     console.log(
-      //       `클라이언트 로그인 이름: ${data.name} 유저아이디 : ${data.userid}`
-      //     );
-      //     socket.name = data.name;
-      //     socket.userid = data.userid;
-      //     this.io.emit("login", data.name);
-      //   });
+      const existingSocket = this.activeSockets.find(
+        (existingSocket) => existingSocket === socket.id
+      );
+      if (!existingSocket) {
+        this.activeSockets.push(socket.id);
 
+        socket.emit("update-user-list", {
+          users: this.activeSockets.filter(
+            (existingSocket) => existingSocket !== socket.id
+          ),
+        });
+
+        socket.broadcast.emit("update-user-list", {
+          users: [socket.id],
+        });
+      }
+      socket.on("call-user", (data: any) => {
+        socket.to(data.to).emit("call-made", {
+          offer: data.offer,
+          socket: socket.id,
+        });
+      });
+
+      socket.on("make-answer", (data) => {
+        socket.to(data.to).emit("answer-made", {
+          socket: socket.id,
+          answer: data.answer,
+        });
+      });
+
+      socket.on("reject-call", (data) => {
+        socket.to(data.from).emit("call-rejected", {
+          socket: socket.id,
+        });
+      });
+
+      socket.on("disconnect", () => {
+        this.activeSockets = this.activeSockets.filter(
+          (existingSocket) => existingSocket !== socket.id
+        );
+        socket.broadcast.emit("remove-user", {
+          socketId: socket.id,
+        });
+      });
       console.log("Socket connected.");
     });
   }
