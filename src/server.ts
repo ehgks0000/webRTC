@@ -38,7 +38,15 @@ export class Server {
   private initialize(): void {
     this.app = express();
     this.httpServer = createServer(this.credentials, this.app);
-    this.io = new SocketIOServer(this.httpServer);
+    this.io = new SocketIOServer(this.httpServer, {
+      cors: {
+        origin: "https://localhost",
+        methods: ["GET", "POST"],
+        // transports: ["websocket", "polling"],
+        credentials: true,
+      },
+      allowEIO3: true,
+    });
 
     this.configureApp();
     this.handleRoutes();

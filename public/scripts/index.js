@@ -63,7 +63,7 @@ function updateUserList(socketIds) {
   });
 }
 
-const socket = io.connect("localhost:5000");
+const socket = io.connect("https://localhost:5000");
 
 socket.on("update-user-list", ({ users }) => {
   updateUserList(users);
@@ -79,8 +79,9 @@ socket.on("remove-user", ({ socketId }) => {
 
 socket.on("call-made", async (data) => {
   if (getCalled) {
+    console.log("콜하는중");
     const confirmed = confirm(
-      `User "Socket: ${data.socket}" wants to call you. Do accept this call?`
+      `User "Socket: ${data?.socket}" wants to call you. Do accept this call?`
     );
 
     if (!confirmed) {
@@ -132,6 +133,7 @@ navigator.getUserMedia(
   { video: true, audio: true },
   (stream) => {
     const localVideo = document.getElementById("local-video");
+    console.log("로컬 비디오");
     if (localVideo) {
       localVideo.srcObject = stream;
     }
