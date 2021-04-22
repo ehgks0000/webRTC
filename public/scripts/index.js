@@ -1,144 +1,65 @@
-let isAlreadyCalling = false;
-let getCalled = false;
+// 방 리스트
+function createRoomContainer(roomId) {
+  const makeRoomElement = document.createElement("div");
+  const makeRoom = document.createElement("p");
 
-const existingCalls = [];
+  makeRoomElement.setAttribute("class", "active-room");
+  makeRoomElement.setAttribute("id", roomId);
 
-const { RTCPeerConnection, RTCSessionDescription } = window;
+  makeRoom.setAttribute("class", "roomName");
+  makeRoom.innerHTML = `Socket: ${roomId}`;
 
-const peerConnection = new RTCPeerConnection();
+  makeRoomElement.appendChild(makeRoom);
 
-function unselectUsersFromList() {
-  const alreadySelectedUser = document.querySelectorAll(
-    ".active-user.active-user--selected"
-  );
-
-  alreadySelectedUser.forEach((el) => {
-    el.setAttribute("class", "active-user");
+  makeRoomElement.addEventListener("click", () => {
+    makeRoomElement.setAttribute("class", "active-room active-room--selected");
   });
 }
 
-function createUserItemContainer(socketId) {
-  const userContainerEl = document.createElement("div");
+const makeRoom = document.getElementById("make-room");
+makeRoom.addEventListener("click", () => {
+  const roomName = prompt("방 제목 입력");
+  console.log("방 제목 : ", roomName);
 
-  const usernameEl = document.createElement("p");
-
-  userContainerEl.setAttribute("class", "active-user");
-  userContainerEl.setAttribute("id", socketId);
-  usernameEl.setAttribute("class", "username");
-  usernameEl.innerHTML = `Socket: ${socketId}`;
-
-  userContainerEl.appendChild(usernameEl);
-
-  userContainerEl.addEventListener("click", () => {
-    unselectUsersFromList();
-    userContainerEl.setAttribute("class", "active-user active-user--selected");
-    const talkingWithInfo = document.getElementById("talking-with-info");
-    talkingWithInfo.innerHTML = `Talking with: "Socket: ${socketId}"`;
-    callUser(socketId);
+  socket.emit("join-room", {
+    roomId: roomName,
+    userId: myName,
   });
+});
 
-  return userContainerEl;
-}
+//유저 접속하면 서버에 저장되어있는 룸 리스트 불러옴
+function updateRoomList(roomList) {
+  const activeRoomContainer = document.getElementById("active-room-container");
 
-async function callUser(socketId) {
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(new RTCSessionDescription(offer));
+  console.log("룸리스트 목록 :", roomList);
+  roomList.forEach((roomId) => {
+    // 룸 리스트 반복
+    const alreadyExistingRoom = document.getElementById(roomId);
+    if (!alreadyExistingRoom) {
+      const roomContainerEl = createRoomContainer(roomId);
 
-  socket.emit("call-user", {
-    offer,
-    to: socketId,
-  });
-}
+      console.log("새로 만들 룸 목록 :", roomContainerEl);
 
-function updateUserList(socketIds) {
-  const activeUserContainer = document.getElementById("active-user-container");
-
-  socketIds.forEach((socketId) => {
-    const alreadyExistingUser = document.getElementById(socketId);
-    if (!alreadyExistingUser) {
-      const userContainerEl = createUserItemContainer(socketId);
-
-      activeUserContainer.appendChild(userContainerEl);
+      activeRoomContainer.appendChild(roomContainerEl);
     }
   });
 }
-
 const socket = io.connect("https://localhost:5000");
 
-socket.on("update-user-list", ({ users }) => {
-  updateUserList(users);
+const myName = prompt("이름 입력");
+console.log("내가 입력 받은 것 : ", myName);
+
+// socket.emit("join-room", {
+//   roomId: myName,
+//   //   name: makeRandomName(),
+//   userId: Math.floor(Math.random() * 100),
+// });
+
+// socket.on("join", (data) => {
+//   console.log(`${data}가 접속 했습니다.`);
+// });
+
+socket.on("update-room-list", ({ roomList }) => {
+  console.log("roomId :", roomList);
+  updateRoomList(roomList);
 });
-
-socket.on("remove-user", ({ socketId }) => {
-  const elToRemove = document.getElementById(socketId);
-
-  if (elToRemove) {
-    elToRemove.remove();
-  }
-});
-
-socket.on("call-made", async (data) => {
-  if (getCalled) {
-    console.log("콜하는중");
-    const confirmed = confirm(
-      `User "Socket: ${data?.socket}" wants to call you. Do accept this call?`
-    );
-
-    if (!confirmed) {
-      socket.emit("reject-call", {
-        from: data.socket,
-      });
-
-      return;
-    }
-  }
-
-  await peerConnection.setRemoteDescription(
-    new RTCSessionDescription(data.offer)
-  );
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(new RTCSessionDescription(answer));
-
-  socket.emit("make-answer", {
-    answer,
-    to: data.socket,
-  });
-  getCalled = true;
-});
-
-socket.on("answer-made", async (data) => {
-  await peerConnection.setRemoteDescription(
-    new RTCSessionDescription(data.answer)
-  );
-
-  if (!isAlreadyCalling) {
-    callUser(data.socket);
-    isAlreadyCalling = true;
-  }
-});
-
-socket.on("call-rejected", (data) => {
-  alert(`User: "Socket: ${data.socket}" rejected your call.`);
-  unselectUsersFromList();
-});
-
-peerConnection.ontrack = function ({ streams: [stream] }) {
-  const remoteVideo = document.getElementById("remote-video");
-  if (remoteVideo) {
-    remoteVideo.srcObject = stream;
-  }
-};
-
-navigator.getUserMedia(
-  { video: true, audio: true },
-  (stream) => {
-    const localVideo = document.getElementById("local-video");
-    console.log("로컬 비디오");
-    if (localVideo) {
-      localVideo.srcObject = stream;
-    }
-  },
-  (error) => {
-    console.warn(error.message);
-  }
-);

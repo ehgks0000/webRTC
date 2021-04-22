@@ -4,6 +4,10 @@ import { Server as SocketIOServer } from "socket.io";
 import { Server as HTTPServer, createServer } from "https";
 import fs from "fs";
 import path from "path";
+import cors from "cors";
+import { v4 as uuidV4 } from "uuid";
+import { Users } from "../utils/users";
+import { formatMessage } from "../utils/message";
 
 interface Credentials {
   key: Buffer;
@@ -11,13 +15,15 @@ interface Credentials {
 }
 
 export class Server {
+  private users: Users;
+  //   private message: formatMEssage;
   private httpServer: HTTPServer;
   private app: Application;
   private io: SocketIOServer;
 
-  private activeSockets: string[] = [];
-
   private readonly DEFAULT_PORT: number = 5000;
+  private readonly DEFAULT_URL: string = `https://localhost:${this.DEFAULT_PORT}`;
+  private readonly botname: string = "Chat Bot";
 
   private readonly credentials: Credentials = {
     key: fs.readFileSync("./cert.key"),
@@ -26,27 +32,32 @@ export class Server {
 
   private configureApp(): void {
     this.app.use(express.static(path.join(__dirname, "../public")));
+    this.app.use(cors());
+    this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: true }));
   }
+
+  private readonly socketIoOptions = {
+    cors: {
+      origin: this.DEFAULT_URL,
+      method: ["GET", "POST"],
+      credentials: true,
+    },
+    allowEIO3: true,
+  };
+
+  //   private roomList = new Map();
+  private roomList: string[] = [];
+  private userList: string[] = [];
 
   constructor() {
     this.initialize();
-
-    // this.handleRoutes();
-    // this.handleSocketConnection();
   }
 
   private initialize(): void {
     this.app = express();
     this.httpServer = createServer(this.credentials, this.app);
-    this.io = new SocketIOServer(this.httpServer, {
-      cors: {
-        origin: "https://localhost",
-        methods: ["GET", "POST"],
-        // transports: ["websocket", "polling"],
-        credentials: true,
-      },
-      allowEIO3: true,
-    });
+    this.io = new SocketIOServer(this.httpServer, this.socketIoOptions);
 
     this.configureApp();
     this.handleRoutes();
@@ -57,56 +68,84 @@ export class Server {
     this.app.get("/", (req, res) => {
       //   res.send(`<h1>Hello World</h1>`);
       res.sendFile("index.html");
+      //   res.redirect("")
     });
+
+    this.app.get("/room", (req, res) => {
+      res.send({ roomId: uuidV4() });
+    });
+
+    // 클라이언트에서 room id와 유저아이디
+
+    // this.app.get("/:room", (req, res) => {
+    //   res.render("room", { roomId: req.params.room });
+    // });
   }
 
   private handleSocketConnection(): void {
     this.io.on("connection", (socket) => {
-      const existingSocket = this.activeSockets.find(
-        (existingSocket) => existingSocket === socket.id
-      );
-      if (!existingSocket) {
-        this.activeSockets.push(socket.id);
+      console.log(`Socket connected.`);
 
-        socket.emit("update-user-list", {
-          users: this.activeSockets.filter(
-            (existingSocket) => existingSocket !== socket.id
-          ),
-        });
-
-        socket.broadcast.emit("update-user-list", {
-          users: [socket.id],
-        });
-      }
-      socket.on("call-user", (data: any) => {
-        socket.to(data.to).emit("call-made", {
-          offer: data.offer,
-          socket: socket.id,
-        });
+      // 클라 접속 하면
+      socket.emit("update-room-list", {
+        roomList: this.roomList,
       });
 
-      socket.on("make-answer", (data) => {
-        socket.to(data.to).emit("answer-made", {
-          socket: socket.id,
-          answer: data.answer,
+      socket.on("join-room", ({ roomId, userId }) => {
+        this.roomList.push(roomId);
+        this.userList.push(userId);
+        const user = this.users.userJoin(socket.id, userId, roomId);
+
+        socket.join(user.room);
+
+        this.io.emit("update-rooms-list", this.roomList);
+        this.io.to(user.room).emit("update-users-list", this.userList);
+
+        socket.emit("message", formatMessage(this.botname, "Welcome to Chat"));
+
+        socket.broadcast
+          .to(user.room)
+          .emit(
+            "message",
+            formatMessage(this.botname, `${user.username} 접속 했습니다.`)
+          );
+
+        this.io.to(user.room).emit("room-users", {
+          room: user.room,
+          users: this.users.getRoomUsers(user.room),
         });
+        // socket.to(roomId).emit("user-connected", userId);
+
+        // socket.on("disconnect", () => {
+        //   socket.to(roomId).emit("user-disconnected", userId);
+        // });
       });
 
-      socket.on("reject-call", (data) => {
-        socket.to(data.from).emit("call-rejected", {
-          socket: socket.id,
-        });
+      socket.on("chatMessage", (msg) => {
+        const user = this.users.getCurrentUser(socket.id);
+
+        this.io
+          .to(user.room)
+          .emit("message", formatMessage(user.username, msg));
       });
 
       socket.on("disconnect", () => {
-        this.activeSockets = this.activeSockets.filter(
-          (existingSocket) => existingSocket !== socket.id
-        );
-        socket.broadcast.emit("remove-user", {
-          socketId: socket.id,
+        const user = this.users.userLeave(socket.id);
+
+        if (user) {
+          this.io
+            .to(user.room)
+            .emit(
+              "message",
+              formatMessage(this.botname, `${user.username}가 떠났습니다.`)
+            );
+        }
+
+        this.io.to(user.room).emit("room-users", {
+          room: user.room,
+          users: this.users.getRoomUsers(user.room),
         });
       });
-      console.log("Socket connected.");
     });
   }
 
