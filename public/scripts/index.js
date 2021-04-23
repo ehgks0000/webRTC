@@ -5,10 +5,22 @@ const createRoomButton = document.getElementById("test");
 const joinRoomButton = document.getElementById("join-room-btn");
 const leaveRoomButton = document.getElementById("leave-room-btn");
 const removeRoomButton = document.getElementById("remove-room-btn");
-
-const myScreenSharingBtn = document.getElementById("my-screen-share");
-
 const chatBtn = document.getElementById("chat-btn");
+
+//
+
+// const myPeer = new Peer(undefined, {
+//   path: "/peerjs",
+//   host: "/",
+//   port: "443",
+// });
+const myPeer = new Peer();
+
+const videoGrid = document.getElementById("screen-container");
+const myScreen = document.createElement("video");
+const peerScreen = document.getElementById("peer-screen-container");
+myScreen.muted = true;
+const peers = {};
 
 let myRoomId = null;
 
@@ -26,6 +38,23 @@ createRoomButton.addEventListener("click", (e) => {
 joinRoomButton.addEventListener("click", (e) => {
   e.preventDefault();
   console.log("방참가 버튼");
+
+  navigator.mediaDevices
+    .getDisplayMedia({ video: true, audio: true })
+    .then((stream) => {
+      addVideoStream(myScreen, stream);
+
+      myPeer.on("call", (call) => {
+        call.answer(stream);
+        const video = document.createElement("video");
+        call.on("stream", (userVideoStream) => {
+          addVideoStream(video, userVideoStream);
+        });
+      });
+      socket.on("user-connected", (userId) => {
+        connectToNewUser(userId, stream);
+      });
+    });
 });
 leaveRoomButton.addEventListener("click", (e) => {
   e.preventDefault();
@@ -59,3 +88,27 @@ socket.on("preChat");
 socket.on("room-users", ({ users }) => {
   console.log("방 사람들 :", users);
 });
+
+myPeer.on("open", (id) => {
+  socket.emit("join-room", roomId, id);
+});
+
+const connectToNewUser = (userId, stream) => {
+  const call = myPeer.call(userId, stream);
+  const video = document.createElement("video");
+  call.on("stream", (userVideoStream) => {
+    addVideoStream(video, userVideoStream);
+  });
+  call.on("close", () => {
+    video.remove();
+  });
+  peers[userId] = call;
+};
+
+const addVideoStream = (video, stream) => {
+  video.srcObject = stream;
+  video.addEventListener("loadedmetadata", () => {
+    video.play();
+  });
+  videoGrid.append(video);
+};

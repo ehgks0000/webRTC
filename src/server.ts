@@ -94,7 +94,7 @@ export class Server {
       //   socket.emit("update-list", this.list);
 
       // 입장과 만들기 둘 다
-      socket.on("join-room", ({ roomId, userId }) => {
+      socket.on("joqin-room", ({ roomId, userId }) => {
         this.list.push({ roomId: roomId, members: [userId] });
 
         const user = this.users.userJoin(socket.id, userId, roomId);
@@ -114,7 +114,7 @@ export class Server {
             "message",
             formatMessage(this.botname, `${user.username}가 접속 했습니다.`)
           );
-        // 특정 방에 입장하면 그 방의 유저리스트 갱신
+        // 특정 방에 입장하면 그 방의 유저리스트 갱신qq
         this.io.to(user.room).emit("room-users", {
           //   room: user.room,
           users: this.users.getRoomUsers(user.room),
@@ -125,9 +125,9 @@ export class Server {
         });
         // socket.to(roomId).emit("user-connected", userId);
 
-        // socket.on("disconnect", () => {
-        //   socket.to(roomId).emit("user-disconnected", userId);
-        // });
+        socket.on("disconnect", () => {
+          socket.to(user.room).emit("user-disconnected", user.id);
+        });
       });
 
       socket.on("chatMessage", ({ msg }) => {
