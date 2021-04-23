@@ -3,16 +3,29 @@ interface User {
   username: string;
   room: string;
 }
+interface Chat {
+  room: string;
+  username: string;
+  chat: string;
+}
 
 export class Users {
   private users: User[] = [];
 
-  constructor(id: string, username: string, room: string) {
-    this.userJoin(id, username, room);
-    this.getCurrentUser(id);
-    this.userLeave(id);
-    this.getRoomUsers(room);
-  }
+  private chats: Chat[] = [];
+
+  //   constructor(id: string, username: string, room: string) {
+  //     this.userJoin(id, username, room);
+  //     this.getCurrentUser(id);
+  //     this.userLeave(id);
+  //     this.getRoomUsers(room);
+  //   }
+
+  constructor() {}
+
+  getUsers = () => {
+    return this.users;
+  };
 
   userJoin = (id: string, username: string, room: string): User => {
     const user = { id, username, room };
@@ -21,6 +34,18 @@ export class Users {
 
     return user;
   };
+
+  //   getChat = (room: string) => {
+  //     const chatList = this.chats.filter((chat) => {
+  //       chat.room !== room;
+  //     });
+  //     return chatList;
+  //   };
+  //   pushChat = (room: string, username: string, chat: string) => {
+  //     const chatList = { room, username, chat };
+  //     this.chats.push(chatList);
+  //     console.log("this.chats : ", this.chats);
+  //   };
 
   getCurrentUser = (id: string): User => {
     return this.users.find((user) => user.id === id);

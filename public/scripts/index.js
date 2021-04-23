@@ -1,65 +1,61 @@
-// 방 리스트
-function createRoomContainer(roomId) {
-  const makeRoomElement = document.createElement("div");
-  const makeRoom = document.createElement("p");
+const socket = io.connect("https://localhost:5000");
 
-  makeRoomElement.setAttribute("class", "active-room");
-  makeRoomElement.setAttribute("id", roomId);
+const createRoomButton = document.getElementById("test");
+// const createRoomButton = document.getElementsByClassName("create-room-btn");
+const joinRoomButton = document.getElementById("join-room-btn");
+const leaveRoomButton = document.getElementById("leave-room-btn");
+const removeRoomButton = document.getElementById("remove-room-btn");
 
-  makeRoom.setAttribute("class", "roomName");
-  makeRoom.innerHTML = `Socket: ${roomId}`;
+const myScreenSharingBtn = document.getElementById("my-screen-share");
 
-  makeRoomElement.appendChild(makeRoom);
+const chatBtn = document.getElementById("chat-btn");
 
-  makeRoomElement.addEventListener("click", () => {
-    makeRoomElement.setAttribute("class", "active-room active-room--selected");
-  });
-}
+let myRoomId = null;
 
-const makeRoom = document.getElementById("make-room");
-makeRoom.addEventListener("click", () => {
-  const roomName = prompt("방 제목 입력");
-  console.log("방 제목 : ", roomName);
-
+createRoomButton.addEventListener("click", (e) => {
+  e.preventDefault();
+  const roomId = prompt("방 이름을 입력하세요 :");
+  const userId = prompt("유저 이름을 입력하세요 :");
+  myRoomId = roomId;
   socket.emit("join-room", {
-    roomId: roomName,
-    userId: myName,
+    roomId,
+    userId,
   });
 });
 
-//유저 접속하면 서버에 저장되어있는 룸 리스트 불러옴
-function updateRoomList(roomList) {
-  const activeRoomContainer = document.getElementById("active-room-container");
+joinRoomButton.addEventListener("click", (e) => {
+  e.preventDefault();
+  console.log("방참가 버튼");
+});
+leaveRoomButton.addEventListener("click", (e) => {
+  e.preventDefault();
+  console.log("방나가기 버튼");
+});
 
-  console.log("룸리스트 목록 :", roomList);
-  roomList.forEach((roomId) => {
-    // 룸 리스트 반복
-    const alreadyExistingRoom = document.getElementById(roomId);
-    if (!alreadyExistingRoom) {
-      const roomContainerEl = createRoomContainer(roomId);
+// removeRoomButton.addEventListener("click", (e) => {
+//   e.preventDefault();
+//   console.log("방제거 버튼");
 
-      console.log("새로 만들 룸 목록 :", roomContainerEl);
-
-      activeRoomContainer.appendChild(roomContainerEl);
-    }
-  });
-}
-const socket = io.connect("https://localhost:5000");
-
-const myName = prompt("이름 입력");
-console.log("내가 입력 받은 것 : ", myName);
-
-// socket.emit("join-room", {
-//   roomId: myName,
-//   //   name: makeRandomName(),
-//   userId: Math.floor(Math.random() * 100),
+//   socket.emit("remove-room", {
+//     myRoomId,
+//   });
 // });
 
-// socket.on("join", (data) => {
-//   console.log(`${data}가 접속 했습니다.`);
-// });
+socket.on("update-list", (data) => {
+  console.log("업데이트 리스트 : ", data);
+});
 
-socket.on("update-room-list", ({ roomList }) => {
-  console.log("roomId :", roomList);
-  updateRoomList(roomList);
+socket.on("message", ({ username, text, time }) => {
+  console.log(`${username} : ${text}, ${time}`);
+});
+
+chatBtn.addEventListener("click", (e) => {
+  const msg = prompt("채팅 입력하세요");
+  socket.emit("chatMessage", { msg });
+});
+
+socket.on("preChat");
+
+socket.on("room-users", ({ users }) => {
+  console.log("방 사람들 :", users);
 });

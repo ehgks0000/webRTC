@@ -13,6 +13,10 @@ interface Credentials {
   key: Buffer;
   cert: Buffer;
 }
+interface List {
+  roomId: string;
+  members: string[];
+}
 
 export class Server {
   private users: Users;
@@ -46,9 +50,7 @@ export class Server {
     allowEIO3: true,
   };
 
-  //   private roomList = new Map();
-  private roomList: string[] = [];
-  private userList: string[] = [];
+  private list: List[] = [];
 
   constructor() {
     this.initialize();
@@ -58,6 +60,7 @@ export class Server {
     this.app = express();
     this.httpServer = createServer(this.credentials, this.app);
     this.io = new SocketIOServer(this.httpServer, this.socketIoOptions);
+    this.users = new Users();
 
     this.configureApp();
     this.handleRoutes();
@@ -87,19 +90,21 @@ export class Server {
       console.log(`Socket connected.`);
 
       // 클라 접속 하면
-      socket.emit("update-room-list", {
-        roomList: this.roomList,
-      });
+      socket.emit("update-list", this.users.getUsers());
+      //   socket.emit("update-list", this.list);
 
+      // 입장과 만들기 둘 다
       socket.on("join-room", ({ roomId, userId }) => {
-        this.roomList.push(roomId);
-        this.userList.push(userId);
+        this.list.push({ roomId: roomId, members: [userId] });
+
         const user = this.users.userJoin(socket.id, userId, roomId);
+        // const chat = this.users.chatList(roomId);
 
         socket.join(user.room);
 
-        this.io.emit("update-rooms-list", this.roomList);
-        this.io.to(user.room).emit("update-users-list", this.userList);
+        //방 입장하거나 개설하면
+        this.io.emit("update-list", this.users.getUsers());
+        // this.io.emit("update-list", this.list);
 
         socket.emit("message", formatMessage(this.botname, "Welcome to Chat"));
 
@@ -107,12 +112,16 @@ export class Server {
           .to(user.room)
           .emit(
             "message",
-            formatMessage(this.botname, `${user.username} 접속 했습니다.`)
+            formatMessage(this.botname, `${user.username}가 접속 했습니다.`)
           );
-
+        // 특정 방에 입장하면 그 방의 유저리스트 갱신
         this.io.to(user.room).emit("room-users", {
-          room: user.room,
+          //   room: user.room,
           users: this.users.getRoomUsers(user.room),
+        });
+
+        socket.on("remove-room", ({ myRoomId }) => {
+          socket.leave(roomId);
         });
         // socket.to(roomId).emit("user-connected", userId);
 
@@ -121,8 +130,9 @@ export class Server {
         // });
       });
 
-      socket.on("chatMessage", (msg) => {
+      socket.on("chatMessage", ({ msg }) => {
         const user = this.users.getCurrentUser(socket.id);
+        // this.users.pushChat(user.room, user.username, msg);
 
         this.io
           .to(user.room)
@@ -131,7 +141,7 @@ export class Server {
 
       socket.on("disconnect", () => {
         const user = this.users.userLeave(socket.id);
-
+        console.log("방 나기기 :", user);
         if (user) {
           this.io
             .to(user.room)
@@ -140,11 +150,10 @@ export class Server {
               formatMessage(this.botname, `${user.username}가 떠났습니다.`)
             );
         }
-
-        this.io.to(user.room).emit("room-users", {
-          room: user.room,
-          users: this.users.getRoomUsers(user.room),
-        });
+        // this.io.to(user.room).emit("room-users", {
+        //   room: user.room,
+        //   users: this.users.getRoomUsers(user.room),
+        // });
       });
     });
   }
