@@ -3,7 +3,7 @@ import { Server } from "./server";
 const server = new Server();
 
 server.listen((port) => {
-  console.log(`Server is 듣는중 with 젠킨스! 22 ${port}`);
+  console.log(`Server is 듣는중 with 젠킨스! 한수민 ㅎㅎ 22 ${port}`);
 });
 //0-----------------
 // import express from "express";
